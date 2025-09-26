@@ -1,0 +1,14 @@
+[
+  {
+    "id": "1",
+    "email": "alice@example.com",
+    "name": "Alice Johnson",
+    "password": "$2a$10$0rJrB2lQdg/fcvTtQ6Lf/.Q8v7NFsfcogUQ1LHOvgjBRXMiQrg.qS"
+  },
+  {
+    "id": "2",
+    "email": "bob@example.com",
+    "name": "Bob Smith",
+    "password": "$2a$10$/sPFZhBvvhk8LOyDXn8V3e/gtmvwTJ.o32pUEaweItuTuKWy0go/y"
+  }
+]
