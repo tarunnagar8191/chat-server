@@ -132,8 +132,12 @@ class SocketHandler {
         const { toUserId, callType = "voice" } = data;
         const fromUserId = socket.userId;
 
+        console.log(`📞 Call initiate request: User ${fromUserId} calling User ${toUserId}`);
+        console.log(`📞 Call data:`, data);
+
         if (!toUserId) {
-          socket.emit("error", {
+          console.log(`❌ Missing toUserId in call request`);
+          socket.emit("call:failed", {
             message: "toUserId is required for call",
             code: "INVALID_DATA",
           });
@@ -142,7 +146,10 @@ class SocketHandler {
 
         // Check if recipient is online
         const recipientSocket = this.connectedUsers.get(parseInt(toUserId));
+        console.log(`🔍 Checking recipient ${toUserId} online status: ${recipientSocket ? 'ONLINE' : 'OFFLINE'}`);
+        
         if (!recipientSocket) {
+          console.log(`❌ User ${toUserId} is offline`);
           socket.emit("call:failed", {
             message: "User is not available",
             code: "USER_OFFLINE",
@@ -159,6 +166,8 @@ class SocketHandler {
           roomId: `room_${uuidv4()}`,
         };
 
+        console.log(`✅ Creating call with data:`, callData);
+
         // Save call to database
         const call = new Call(callData);
         await call.save();
@@ -167,16 +176,22 @@ class SocketHandler {
         await call.populate("fromUserId", "name email userType");
         await call.populate("toUserId", "name email userType");
 
+        console.log(`📞 Sending call:incoming to user ${toUserId}`);
+        console.log(`📞 Sending call:initiated to user ${fromUserId}`);
+
         // Send to recipient
         recipientSocket.emit("call:incoming", call);
 
         // Confirm to caller
         socket.emit("call:initiated", call);
+        
+        console.log(`✅ Call initiated successfully between ${fromUserId} and ${toUserId}`);
       } catch (error) {
         console.error("Call initiate error:", error);
-        socket.emit("error", {
+        socket.emit("call:failed", {
           message: "Failed to initiate call",
           code: "CALL_FAILED",
+          error: error.message,
         });
       }
     });
