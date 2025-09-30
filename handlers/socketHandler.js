@@ -247,24 +247,59 @@ class SocketHandler {
 
         const call = await Call.findOneAndUpdate({ callId }, updateData, {
           new: true,
-        })
-          .populate("fromUserId", "name email userType")
-          .populate("toUserId", "name email userType");
+        });
+
+        console.log(`📞 Call response: ${response} for call ${callId}`);
+        console.log(`📞 Updated call:`, call);
 
         if (call) {
+          // Manually fetch user details instead of populate
+          const fromUser = await User.findOne({
+            userId: call.fromUserId,
+          }).select("name email userType");
+          const toUser = await User.findOne({ userId: call.toUserId }).select(
+            "name email userType"
+          );
+
+          const enrichedCall = {
+            ...call.toObject(),
+            fromUser: fromUser
+              ? {
+                  name: fromUser.name,
+                  email: fromUser.email,
+                  userType: fromUser.userType,
+                }
+              : null,
+            toUser: toUser
+              ? {
+                  name: toUser.name,
+                  email: toUser.email,
+                  userType: toUser.userType,
+                }
+              : null,
+          };
+
           // Notify caller
           const callerSocket = this.connectedUsers.get(parseInt(toUserId));
           if (callerSocket) {
+            console.log(
+              `📞 Notifying caller ${toUserId} of response: ${response}`
+            );
             callerSocket.emit("call:response", {
               callId,
               response,
               fromUserId,
-              call,
+              call: enrichedCall,
             });
           }
 
           // Confirm to responder
-          socket.emit("call:responded", { callId, response, call });
+          console.log(`📞 Confirming response to responder ${fromUserId}`);
+          socket.emit("call:responded", {
+            callId,
+            response,
+            call: enrichedCall,
+          });
         }
       } catch (error) {
         console.error("Call respond error:", error);
