@@ -132,7 +132,9 @@ class SocketHandler {
         const { toUserId, callType = "voice" } = data;
         const fromUserId = socket.userId;
 
-        console.log(`📞 Call initiate request: User ${fromUserId} calling User ${toUserId}`);
+        console.log(
+          `📞 Call initiate request: User ${fromUserId} calling User ${toUserId}`
+        );
         console.log(`📞 Call data:`, data);
 
         if (!toUserId) {
@@ -146,8 +148,12 @@ class SocketHandler {
 
         // Check if recipient is online
         const recipientSocket = this.connectedUsers.get(parseInt(toUserId));
-        console.log(`🔍 Checking recipient ${toUserId} online status: ${recipientSocket ? 'ONLINE' : 'OFFLINE'}`);
-        
+        console.log(
+          `🔍 Checking recipient ${toUserId} online status: ${
+            recipientSocket ? "ONLINE" : "OFFLINE"
+          }`
+        );
+
         if (!recipientSocket) {
           console.log(`❌ User ${toUserId} is offline`);
           socket.emit("call:failed", {
@@ -184,8 +190,10 @@ class SocketHandler {
 
         // Confirm to caller
         socket.emit("call:initiated", call);
-        
-        console.log(`✅ Call initiated successfully between ${fromUserId} and ${toUserId}`);
+
+        console.log(
+          `✅ Call initiated successfully between ${fromUserId} and ${toUserId}`
+        );
       } catch (error) {
         console.error("Call initiate error:", error);
         socket.emit("call:failed", {
