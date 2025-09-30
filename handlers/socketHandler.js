@@ -179,8 +179,12 @@ class SocketHandler {
         await call.save();
 
         // Manually fetch user details since we're using numeric userIds, not ObjectIds
-        const fromUser = await User.findOne({ userId: fromUserId }).select('name email userType');
-        const toUser = await User.findOne({ userId: parseInt(toUserId) }).select('name email userType');
+        const fromUser = await User.findOne({ userId: fromUserId }).select(
+          "name email userType"
+        );
+        const toUser = await User.findOne({
+          userId: parseInt(toUserId),
+        }).select("name email userType");
 
         console.log(`📞 From user details:`, fromUser);
         console.log(`📞 To user details:`, toUser);
@@ -188,16 +192,20 @@ class SocketHandler {
         // Create enriched call data for sending
         const enrichedCallData = {
           ...callData,
-          fromUser: fromUser ? {
-            name: fromUser.name,
-            email: fromUser.email,
-            userType: fromUser.userType
-          } : null,
-          toUser: toUser ? {
-            name: toUser.name,
-            email: toUser.email,
-            userType: toUser.userType
-          } : null
+          fromUser: fromUser
+            ? {
+                name: fromUser.name,
+                email: fromUser.email,
+                userType: fromUser.userType,
+              }
+            : null,
+          toUser: toUser
+            ? {
+                name: toUser.name,
+                email: toUser.email,
+                userType: toUser.userType,
+              }
+            : null,
         };
 
         console.log(`📞 Sending call:incoming to user ${toUserId}`);
