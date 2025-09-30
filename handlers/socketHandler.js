@@ -178,18 +178,36 @@ class SocketHandler {
         const call = new Call(callData);
         await call.save();
 
-        // Populate user details
-        await call.populate("fromUserId", "name email userType");
-        await call.populate("toUserId", "name email userType");
+        // Manually fetch user details since we're using numeric userIds, not ObjectIds
+        const fromUser = await User.findOne({ userId: fromUserId }).select('name email userType');
+        const toUser = await User.findOne({ userId: parseInt(toUserId) }).select('name email userType');
+
+        console.log(`📞 From user details:`, fromUser);
+        console.log(`📞 To user details:`, toUser);
+
+        // Create enriched call data for sending
+        const enrichedCallData = {
+          ...callData,
+          fromUser: fromUser ? {
+            name: fromUser.name,
+            email: fromUser.email,
+            userType: fromUser.userType
+          } : null,
+          toUser: toUser ? {
+            name: toUser.name,
+            email: toUser.email,
+            userType: toUser.userType
+          } : null
+        };
 
         console.log(`📞 Sending call:incoming to user ${toUserId}`);
         console.log(`📞 Sending call:initiated to user ${fromUserId}`);
 
         // Send to recipient
-        recipientSocket.emit("call:incoming", call);
+        recipientSocket.emit("call:incoming", enrichedCallData);
 
         // Confirm to caller
-        socket.emit("call:initiated", call);
+        socket.emit("call:initiated", enrichedCallData);
 
         console.log(
           `✅ Call initiated successfully between ${fromUserId} and ${toUserId}`
