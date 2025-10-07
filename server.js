@@ -11,6 +11,7 @@ const { socketAuth } = require("./middleware/auth");
 // Import routes
 const chatRoutes = require("./routes/chat");
 const callRoutes = require("./routes/calls");
+const jitsiRoutes = require("./routes/jitsi");
 
 // Import socket handler
 const SocketHandler = require("./handlers/socketHandler");
@@ -66,10 +67,12 @@ io.on("connection", (socket) => {
 // API Routes
 app.use("/api/chat", chatRoutes);
 app.use("/api/calls", callRoutes);
+app.use("/api/jitsi", jitsiRoutes);
 
 // v1 API Routes (for frontend compatibility)
 app.use("/v1", chatRoutes);
 app.use("/v1/calls", callRoutes);
+app.use("/v1/jitsi", jitsiRoutes);
 
 // Health check endpoint
 app.get("/health", async (req, res) => {
