@@ -5,7 +5,6 @@ const User = require("../models/User");
 // Helper function to validate token with Django backend
 const validateTokenWithDjango = async (token) => {
   try {
-    // First, get other parents to understand the structure
     const response = await axios.get(
       `${process.env.DJANGO_BASE_URL}/get-other-parent/`,
       {
@@ -17,38 +16,19 @@ const validateTokenWithDjango = async (token) => {
       }
     );
 
-    console.log(
-      "Full Django API response:",
-      JSON.stringify(response?.data, null, 2)
-    );
-
     if (response.status === 200 && response.data) {
       const responseData = response.data.data;
       const userData = responseData.summary.authenticated_parent;
 
-      // The actual user IDs from the API response when looking at other_parents
-      let userId;
+      console.log("🔍 Backend: User data from Django:", userData);
 
-      if (userData.email === "tarun.residing@yopmail.com") {
-        userId = 198; // Confirmed from API response
-      } else if (userData.email === "tarun.non_residing@yopmail.com") {
-        userId = 199; // Confirmed from API response
-      } else {
-        // Fallback to hash-based ID for other emails
-        const crypto = require("crypto");
-        const emailHash = crypto
-          .createHash("md5")
-          .update(userData.email)
-          .digest("hex");
-        userId = parseInt(emailHash.substring(0, 8), 16) % 100000;
-      }
-
+      // Return basic user data (userId will be set from frontend)
       return {
-        userId: userId,
-        uid: userData.uid || `user_${userId}`,
         email: userData.email,
         name: userData.name,
         userType: userData.parent_type,
+        uid: userData.uid || `generated_${userData.email}`, // Generate uid if not provided
+        // Note: userId will be provided by frontend since Django doesn't return it here
       };
     }
 
@@ -65,6 +45,7 @@ const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
+    const frontendUserId = req.headers["x-user-id"]; // Get userId from header
 
     if (!token) {
       return res.status(401).json({
@@ -82,11 +63,24 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    // Set user info
-    req.user = userData;
+    // Use frontend userId since token is valid and Django doesn't provide userId
+    const finalUserId = frontendUserId;
 
-    // Update or create user in our database
-    await updateUserFromToken(userData);
+    if (!finalUserId) {
+      return res.status(400).json({
+        error: "User ID required in x-user-id header",
+        code: 400,
+      });
+    }
+
+    console.log("✅ HTTP Token validated successfully");
+    console.log("🔧 HTTP Using userId from frontend:", finalUserId);
+
+    // Set user info with userId for HTTP requests
+    req.user = {
+      ...userData,
+      userId: parseInt(finalUserId), // Ensure it's a number like in socket auth
+    };
 
     next();
   } catch (error) {
@@ -102,10 +96,13 @@ const authenticateToken = async (req, res, next) => {
 const socketAuth = async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
+    const frontendUserId = socket.handshake.auth.userId; // Get userId from frontend
+
     console.log(
       "🔐 Authenticating socket with token:",
       token ? "***provided***" : "missing"
     );
+    console.log("🔐 Frontend userId:", frontendUserId);
 
     if (!token) {
       return next(new Error("Authentication error: Token required"));
@@ -118,15 +115,25 @@ const socketAuth = async (socket, next) => {
       return next(new Error("Authentication error: Invalid token"));
     }
 
-    console.log("✅ Token validated for user:", userData.userId);
+    // Use frontend userId since token is valid and Django doesn't provide userId
+    const finalUserId = frontendUserId;
+
+    if (!finalUserId) {
+      console.log("❌ No userId provided from frontend");
+      return next(new Error("Authentication error: User ID required"));
+    }
+
+    console.log("✅ Token validated successfully");
+    console.log("🔧 Using userId from frontend:", finalUserId);
 
     // Set socket user info
-    socket.userId = userData.userId;
+    socket.userId = finalUserId;
     socket.uid = userData.uid;
     socket.email = userData.email;
 
-    // Update or create user in our database
-    await updateUserFromToken(userData);
+    // Update or create user in our database with the correct userId
+    const updatedUserData = { ...userData, userId: finalUserId };
+    await updateUserFromToken(updatedUserData);
 
     next();
   } catch (error) {
@@ -138,25 +145,45 @@ const socketAuth = async (socket, next) => {
 // Helper function to update user from token data
 const updateUserFromToken = async (userData) => {
   try {
-    await User.findOneAndUpdate(
-      { userId: userData.userId },
-      {
+    // First try to find existing user by userId, email, or uid
+    let existingUser = await User.findOne({
+      $or: [
+        { userId: userData.userId },
+        { email: userData.email },
+        { uid: userData.uid },
+      ],
+    });
+
+    if (existingUser) {
+      // Update existing user
+      await User.findByIdAndUpdate(
+        existingUser._id,
+        {
+          userId: userData.userId,
+          uid: userData.uid,
+          email: userData.email,
+          name: userData.name,
+          userType: userData.userType,
+          lastSeen: new Date(),
+        },
+        { new: true }
+      );
+      console.log(`✅ User ${userData.userId} updated in chat database`);
+    } else {
+      // Create new user
+      await User.create({
         userId: userData.userId,
         uid: userData.uid,
         email: userData.email,
         name: userData.name,
         userType: userData.userType,
         lastSeen: new Date(),
-      },
-      {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-      }
-    );
-    console.log(`✅ User ${userData.userId} updated in chat database`);
+      });
+      console.log(`✅ User ${userData.userId} created in chat database`);
+    }
   } catch (error) {
     console.error("Error updating user from token:", error);
+    // Don't throw the error, just log it to avoid breaking authentication
   }
 };
 
