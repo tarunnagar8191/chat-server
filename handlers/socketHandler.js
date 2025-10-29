@@ -169,7 +169,10 @@ class SocketHandler {
           toUserId: parseInt(toUserId),
           callType,
           status: "initiated",
-          roomId: `room_${uuidv4()}`,
+          roomId: `careh_call_${Math.min(
+            fromUserId,
+            parseInt(toUserId)
+          )}_${Math.max(fromUserId, parseInt(toUserId))}_${Date.now()}`,
         };
 
         console.log(`✅ Creating call with data:`, callData);
