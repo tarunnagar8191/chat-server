@@ -64,8 +64,8 @@ router.post("/initiate", authenticateToken, async (req, res) => {
       });
     }
 
-    // Generate Jitsi-compatible room ID
-    const jitsiRoomId = `careh_call_${Math.min(
+    // Generate unique room ID for the call
+    const roomId = `careh_call_${Math.min(
       fromUserId,
       parseInt(toUserId)
     )}_${Math.max(fromUserId, parseInt(toUserId))}_${Date.now()}`;
@@ -76,7 +76,7 @@ router.post("/initiate", authenticateToken, async (req, res) => {
       toUserId: parseInt(toUserId),
       callType,
       status: "initiated",
-      roomId: jitsiRoomId,
+      roomId: roomId,
     };
 
     const call = new Call(callData);

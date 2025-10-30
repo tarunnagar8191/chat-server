@@ -11,7 +11,6 @@ const { socketAuth } = require("./middleware/auth");
 // Import routes
 const chatRoutes = require("./routes/chat");
 const callRoutes = require("./routes/calls");
-const jitsiRoutes = require("./routes/jitsi");
 
 // Import socket handler
 const SocketHandler = require("./handlers/socketHandler");
@@ -67,12 +66,10 @@ io.on("connection", (socket) => {
 // API Routes
 app.use("/api/chat", chatRoutes);
 app.use("/api/calls", callRoutes);
-app.use("/api/jitsi", jitsiRoutes);
 
 // v1 API Routes (for frontend compatibility)
 app.use("/v1", chatRoutes);
 app.use("/v1/calls", callRoutes);
-app.use("/v1/jitsi", jitsiRoutes);
 
 // Health check endpoint
 app.get("/health", async (req, res) => {
@@ -114,11 +111,11 @@ app.get("/api/info", (req, res) => {
     service: "CareH Chat Microservice",
     version: "2.0.0",
     description:
-      "Real-time chat, voice and video calling service with Jitsi SDK",
+      "Real-time chat, voice and video calling service",
     features: [
       "Real-time messaging",
-      "Voice calls with Jitsi",
-      "Video calls with Jitsi",
+      "Voice calls",
+      "Video calls",
       "User presence tracking",
       "Message delivery status",
       "Call history",
@@ -136,9 +133,6 @@ app.get("/api/info", (req, res) => {
         "message:received",
         "call:initiate",
         "call:incoming",
-        "jitsi:room_created",
-        "jitsi:room_joined",
-        "jitsi:room_left",
       ],
     },
   });
@@ -231,8 +225,8 @@ server.listen(PORT, () => {
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   console.log("\n📋 Available Features:");
   console.log("   ✅ Real-time messaging");
-  console.log("   ✅ Jitsi voice calls");
-  console.log("   ✅ Jitsi video calls");
+  console.log("   ✅ Voice calls");
+  console.log("   ✅ Video calls");
   console.log("   ✅ User presence tracking");
   console.log("   ✅ MongoDB persistence");
   console.log("   ✅ JWT authentication");
@@ -240,7 +234,6 @@ server.listen(PORT, () => {
   console.log("\n🔧 Integration Notes:");
   console.log("   • Use JWT tokens from Django backend");
   console.log("   • Users are auto-created from token data");
-  console.log("   • Jitsi SDK replaces WebRTC for calls");
   console.log("   • All data stored in MongoDB Atlas");
   console.log("\n📚 API Documentation: Check /api/info for details");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");

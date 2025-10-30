@@ -5,7 +5,7 @@ A comprehensive real-time chat, voice, and video calling microservice built with
 ## 🚀 Features
 
 - **Real-time Messaging**: Instant messaging with delivery status
-- **Voice & Video Calls**: WebRTC-based calling system (replaces Jitsi)
+- **Voice & Video Calls**: WebRTC-based calling system 
 - **User Presence**: Online/offline status tracking
 - **Message History**: Persistent chat history with MongoDB
 - **Call History**: Complete call logs with duration tracking
@@ -228,9 +228,6 @@ const response = await fetch("http://localhost:3001/api/chat/users", {
 });
 ```
 
-## 🎥 WebRTC Implementation
-
-Replace Jitsi with this WebRTC implementation:
 
 ### Frontend WebRTC Setup
 
