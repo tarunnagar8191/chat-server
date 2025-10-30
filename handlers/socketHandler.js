@@ -350,6 +350,79 @@ class SocketHandler {
         });
       }
     });
+
+    // WebRTC signaling events
+    socket.on("webrtc:offer", (data) => {
+      try {
+        const { callId, offer } = data;
+        const fromUserId = socket.userId;
+
+        console.log(`📡 WebRTC offer from ${fromUserId} for call ${callId}`);
+
+        // Find the call and get the other participant
+        Call.findOne({ callId }).then(call => {
+          if (call) {
+            const otherUserId = call.fromUserId === fromUserId ? call.toUserId : call.fromUserId;
+            const otherSocket = this.connectedUsers.get(otherUserId);
+
+            if (otherSocket) {
+              console.log(`📡 Forwarding WebRTC offer to ${otherUserId}`);
+              otherSocket.emit("webrtc:offer", { callId, offer });
+            }
+          }
+        });
+      } catch (error) {
+        console.error("WebRTC offer error:", error);
+      }
+    });
+
+    socket.on("webrtc:answer", (data) => {
+      try {
+        const { callId, answer } = data;
+        const fromUserId = socket.userId;
+
+        console.log(`📡 WebRTC answer from ${fromUserId} for call ${callId}`);
+
+        // Find the call and get the other participant
+        Call.findOne({ callId }).then(call => {
+          if (call) {
+            const otherUserId = call.fromUserId === fromUserId ? call.toUserId : call.fromUserId;
+            const otherSocket = this.connectedUsers.get(otherUserId);
+
+            if (otherSocket) {
+              console.log(`📡 Forwarding WebRTC answer to ${otherUserId}`);
+              otherSocket.emit("webrtc:answer", { answer });
+            }
+          }
+        });
+      } catch (error) {
+        console.error("WebRTC answer error:", error);
+      }
+    });
+
+    socket.on("webrtc:ice-candidate", (data) => {
+      try {
+        const { callId, candidate } = data;
+        const fromUserId = socket.userId;
+
+        console.log(`🧊 WebRTC ICE candidate from ${fromUserId} for call ${callId}`);
+
+        // Find the call and get the other participant
+        Call.findOne({ callId }).then(call => {
+          if (call) {
+            const otherUserId = call.fromUserId === fromUserId ? call.toUserId : call.fromUserId;
+            const otherSocket = this.connectedUsers.get(otherUserId);
+
+            if (otherSocket) {
+              console.log(`🧊 Forwarding WebRTC ICE candidate to ${otherUserId}`);
+              otherSocket.emit("webrtc:ice-candidate", { candidate });
+            }
+          }
+        });
+      } catch (error) {
+        console.error("WebRTC ICE candidate error:", error);
+      }
+    });
   }
 
   async updateUserOnlineStatus(userId, isOnline, socketId = null) {
