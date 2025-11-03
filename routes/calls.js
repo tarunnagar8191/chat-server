@@ -17,8 +17,18 @@ router.get("/history", authenticateToken, async (req, res) => {
     const calls = await Call.find({
       $or: [{ fromUserId: currentUserId }, { toUserId: currentUserId }],
     })
-      .populate("fromUserId", "name email userType")
-      .populate("toUserId", "name email userType")
+      .populate({
+        path: "fromUserId",
+        select: "name email userType",
+        foreignField: "userId",
+        localField: "fromUserId"
+      })
+      .populate({
+        path: "toUserId",
+        select: "name email userType",
+        foreignField: "userId",
+        localField: "toUserId"
+      })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(skip);
@@ -83,8 +93,18 @@ router.post("/initiate", authenticateToken, async (req, res) => {
     await call.save();
 
     // Populate user details
-    await call.populate("fromUserId", "name email userType");
-    await call.populate("toUserId", "name email userType");
+    await call.populate({
+      path: "fromUserId",
+      select: "name email userType",
+      foreignField: "userId",
+      localField: "fromUserId"
+    });
+    await call.populate({
+      path: "toUserId",
+      select: "name email userType",
+      foreignField: "userId",
+      localField: "toUserId"
+    });
 
     res.json({
       data: call,
@@ -137,8 +157,18 @@ router.patch("/:callId/status", authenticateToken, async (req, res) => {
       updateData,
       { new: true }
     )
-      .populate("fromUserId", "name email userType")
-      .populate("toUserId", "name email userType");
+      .populate({
+        path: "fromUserId",
+        select: "name email userType",
+        foreignField: "userId",
+        localField: "fromUserId"
+      })
+      .populate({
+        path: "toUserId",
+        select: "name email userType",
+        foreignField: "userId",
+        localField: "toUserId"
+      });
 
     if (!call) {
       return res.status(404).json({
