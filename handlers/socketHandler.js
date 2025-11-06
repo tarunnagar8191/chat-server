@@ -8,6 +8,7 @@ class SocketHandler {
     this.io = io;
     this.connectedUsers = new Map(); // userId -> socket
     this.userSockets = new Map(); // socketId -> userId
+    this.callTimeouts = new Map(); // callId -> timeout reference
   }
 
   handleConnection(socket) {
@@ -19,6 +20,9 @@ class SocketHandler {
 
     // Update user online status
     this.updateUserOnlineStatus(socket.userId, true, socket.id);
+
+    // Send missed calls notification when user comes online
+    this.sendMissedCallsNotification(socket);
 
     // Handle chat events
     this.handleChatEvents(socket);
@@ -154,15 +158,6 @@ class SocketHandler {
           }`
         );
 
-        if (!recipientSocket) {
-          console.log(`❌ User ${toUserId} is offline`);
-          socket.emit("call:failed", {
-            message: "User is not available",
-            code: "USER_OFFLINE",
-          });
-          return;
-        }
-
         const callData = {
           callId: uuidv4(),
           fromUserId,
@@ -211,14 +206,56 @@ class SocketHandler {
             : null,
         };
 
-        console.log(`📞 Sending call:incoming to user ${toUserId}`);
+        // Send to recipient if online
+        if (recipientSocket) {
+          console.log(`📞 Sending call:incoming to user ${toUserId}`);
+          recipientSocket.emit("call:incoming", enrichedCallData);
+        } else {
+          console.log(`⏰ User ${toUserId} is offline, setting up missed call timer`);
+        }
+
+        // Confirm to caller (always show call screen)
         console.log(`📞 Sending call:initiated to user ${fromUserId}`);
-
-        // Send to recipient
-        recipientSocket.emit("call:incoming", enrichedCallData);
-
-        // Confirm to caller
         socket.emit("call:initiated", enrichedCallData);
+
+        // Set up a 60-second timeout to mark call as missed if not answered
+        const missedCallTimeout = setTimeout(async () => {
+          try {
+            const currentCall = await Call.findOne({ callId: callData.callId });
+            
+            // Only mark as missed if call is still in initiated/ringing state
+            if (currentCall && (currentCall.status === "initiated" || currentCall.status === "ringing")) {
+              console.log(`⏰ Call ${callData.callId} timed out, marking as missed`);
+              
+              await Call.findOneAndUpdate(
+                { callId: callData.callId },
+                { 
+                  status: "missed",
+                  endTime: new Date()
+                }
+              );
+
+              // Notify caller that call was not answered
+              const callerSocket = this.connectedUsers.get(fromUserId);
+              if (callerSocket) {
+                callerSocket.emit("call:no-answer", {
+                  callId: callData.callId,
+                  message: "Call was not answered"
+                });
+              }
+
+              console.log(`✅ Call ${callData.callId} marked as missed`);
+            }
+          } catch (error) {
+            console.error(`❌ Error marking call as missed:`, error);
+          }
+        }, 60000); // 60 seconds
+
+        // Store timeout reference for cleanup if call is answered
+        if (!this.callTimeouts) {
+          this.callTimeouts = new Map();
+        }
+        this.callTimeouts.set(callData.callId, missedCallTimeout);
 
         console.log(
           `✅ Call initiated successfully between ${fromUserId} and ${toUserId}`
@@ -239,6 +276,13 @@ class SocketHandler {
         const { callId, response, toUserId } = data; // response: 'accepted' or 'rejected'
         const fromUserId = socket.userId;
 
+        // Clear the missed call timeout if it exists
+        if (this.callTimeouts && this.callTimeouts.has(callId)) {
+          clearTimeout(this.callTimeouts.get(callId));
+          this.callTimeouts.delete(callId);
+          console.log(`⏰ Cleared missed call timeout for call ${callId}`);
+        }
+
         // Update call status in database
         const updateData = {
           status: response === "accept" ? "accepted" : "rejected",
@@ -246,6 +290,8 @@ class SocketHandler {
 
         if (response === "accept") {
           updateData.startTime = new Date();
+        } else {
+          updateData.endTime = new Date();
         }
 
         const call = await Call.findOneAndUpdate({ callId }, updateData, {
@@ -318,6 +364,13 @@ class SocketHandler {
       try {
         const { callId, toUserId } = data;
         const fromUserId = socket.userId;
+
+        // Clear the missed call timeout if it exists
+        if (this.callTimeouts && this.callTimeouts.has(callId)) {
+          clearTimeout(this.callTimeouts.get(callId));
+          this.callTimeouts.delete(callId);
+          console.log(`⏰ Cleared missed call timeout for call ${callId}`);
+        }
 
         // Update call in database
         const call = await Call.findOneAndUpdate(
@@ -446,6 +499,53 @@ class SocketHandler {
       });
     } catch (error) {
       console.error("Update user status error:", error);
+    }
+  }
+
+  async sendMissedCallsNotification(socket) {
+    try {
+      const userId = socket.userId;
+      
+      // Find all missed calls for this user
+      const missedCalls = await Call.find({
+        toUserId: userId,
+        status: "missed",
+        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
+      }).sort({ createdAt: -1 });
+
+      if (missedCalls.length > 0) {
+        console.log(`📞 Found ${missedCalls.length} missed calls for user ${userId}`);
+        
+        // Fetch user details for each missed call
+        const enrichedMissedCalls = await Promise.all(
+          missedCalls.map(async (call) => {
+            const fromUser = await User.findOne({ userId: call.fromUserId }).select(
+              "name email userType"
+            );
+            
+            return {
+              callId: call.callId,
+              fromUserId: call.fromUserId,
+              callType: call.callType,
+              status: call.status,
+              createdAt: call.createdAt,
+              fromUser: fromUser ? {
+                name: fromUser.name,
+                email: fromUser.email,
+                userType: fromUser.userType,
+              } : null,
+            };
+          })
+        );
+
+        // Send notification to user
+        socket.emit("call:missed-calls", {
+          count: missedCalls.length,
+          calls: enrichedMissedCalls,
+        });
+      }
+    } catch (error) {
+      console.error("Send missed calls notification error:", error);
     }
   }
 
