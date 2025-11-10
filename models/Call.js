@@ -43,6 +43,32 @@ const callSchema = new mongoose.Schema(
         sdpMid: String,
       },
     ],
+    // ANT Media Server Recording Fields
+    antMediaStreamId: {
+      type: String,
+      default: null,
+    },
+    recordingStatus: {
+      type: String,
+      enum: ["pending", "recording", "processing", "completed", "failed", "no_recording"],
+      default: "pending",
+    },
+    recordingUrl: {
+      type: String,
+      default: null,
+    },
+    recordingS3Key: {
+      type: String,
+      default: null,
+    },
+    recordingSize: {
+      type: Number, // in bytes
+      default: null,
+    },
+    recordingError: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

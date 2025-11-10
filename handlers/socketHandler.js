@@ -2,6 +2,7 @@ const User = require("../models/User");
 const Message = require("../models/Message");
 const Call = require("../models/Call");
 const { v4: uuidv4 } = require("uuid");
+const recordingService = require("../services/recordingService");
 
 class SocketHandler {
   constructor(io) {
@@ -301,6 +302,20 @@ class SocketHandler {
         console.log(`📞 Call response: ${response} for call ${callId}`);
         console.log(`📞 Updated call:`, call);
 
+        // Start recording if call is accepted
+        if (response === "accept" && call) {
+          console.log(`🎬 Starting call recording for accepted call: ${callId}`);
+          
+          // Start recording asynchronously (don't block the response)
+          recordingService.startCallRecording(callId, {
+            callType: call.callType,
+            fromUserId: call.fromUserId,
+            toUserId: call.toUserId,
+          }).catch(error => {
+            console.error(`❌ Failed to start recording for call ${callId}:`, error.message);
+          });
+        }
+
         if (call) {
           // Manually fetch user details instead of populate
           const fromUser = await User.findOne({
@@ -385,6 +400,16 @@ class SocketHandler {
         if (call && call.startTime) {
           call.duration = Math.floor((call.endTime - call.startTime) / 1000);
           await call.save();
+        }
+
+        // Stop recording and upload to S3
+        if (call && call.antMediaStreamId) {
+          console.log(`🛑 Stopping and uploading call recording for: ${callId}`);
+          
+          // Stop recording asynchronously (don't block the call end notification)
+          recordingService.stopCallRecording(callId).catch(error => {
+            console.error(`❌ Failed to stop/upload recording for call ${callId}:`, error.message);
+          });
         }
 
         // Notify other participant
@@ -549,11 +574,51 @@ class SocketHandler {
     }
   }
 
-  handleDisconnection(socket) {
+  async handleDisconnection(socket) {
     const userId = this.userSockets.get(socket.id);
 
     if (userId) {
       console.log(`🔌 User ${userId} disconnected`);
+
+      // Check for any active calls by this user and handle recording cleanup
+      try {
+        const activeCalls = await Call.find({
+          $or: [
+            { fromUserId: userId },
+            { toUserId: userId }
+          ],
+          status: { $in: ["initiated", "ringing", "accepted"] },
+          antMediaStreamId: { $ne: null }
+        });
+
+        if (activeCalls.length > 0) {
+          console.log(`🧹 Found ${activeCalls.length} active calls for disconnected user ${userId}, cleaning up recordings...`);
+          
+          for (const call of activeCalls) {
+            // Update call status to ended
+            call.status = "ended";
+            call.endTime = new Date();
+            if (call.startTime) {
+              call.duration = Math.floor((call.endTime - call.startTime) / 1000);
+            }
+            await call.save();
+
+            // Stop and upload recording
+            recordingService.stopCallRecording(call.callId).catch(error => {
+              console.error(`❌ Error handling recording for disconnected call ${call.callId}:`, error.message);
+            });
+
+            // Notify the other participant
+            const otherUserId = call.fromUserId === userId ? call.toUserId : call.fromUserId;
+            const otherSocket = this.connectedUsers.get(otherUserId);
+            if (otherSocket) {
+              otherSocket.emit("call:ended", { callId: call.callId, fromUserId: userId });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error handling disconnect cleanup for user ${userId}:`, error.message);
+      }
 
       // Remove from tracking
       this.connectedUsers.delete(userId);

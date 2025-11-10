@@ -291,4 +291,55 @@ router.get("/webrtc-config", authenticateToken, (req, res) => {
   }
 });
 
+// Get call recording
+router.get("/:callId/recording", authenticateToken, async (req, res) => {
+  try {
+    const { callId } = req.params;
+    const currentUserId = req.user.userId;
+
+    // Find the call and verify the user has access to it
+    const call = await Call.findOne({
+      callId,
+      $or: [{ fromUserId: currentUserId }, { toUserId: currentUserId }],
+    });
+
+    if (!call) {
+      return res.status(404).json({
+        error: "Call not found",
+        code: 404,
+      });
+    }
+
+    // Check if recording is available
+    if (!call.recordingUrl) {
+      return res.status(404).json({
+        error: "Recording not available",
+        code: 404,
+        recordingStatus: call.recordingStatus,
+      });
+    }
+
+    res.json({
+      data: {
+        callId: call.callId,
+        recordingUrl: call.recordingUrl,
+        recordingStatus: call.recordingStatus,
+        recordingSize: call.recordingSize,
+        duration: call.duration,
+        callType: call.callType,
+      },
+      meta: {
+        code: 200,
+        message: "Recording retrieved successfully",
+      },
+    });
+  } catch (error) {
+    console.error("Get recording error:", error);
+    res.status(500).json({
+      error: "Failed to get recording",
+      code: 500,
+    });
+  }
+});
+
 module.exports = router;
