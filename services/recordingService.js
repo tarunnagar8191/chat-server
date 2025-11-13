@@ -279,33 +279,20 @@ class RecordingService {
         // Write input buffer to temp file
         await fs.writeFile(inputFile, inputBuffer);
 
-        // Apply FFmpeg audio filters - OPTIMIZED for clear voice with strong noise reduction
+        // Apply FFmpeg audio filters - BALANCED approach for best compatibility
         ffmpeg(inputFile)
           .audioFilters([
-            // Stage 1: Pre-filtering to isolate voice frequency range
-            'highpass=f=100',              // Remove ultra-low rumble
-            'lowpass=f=4000',              // Keep full voice spectrum
-            
-            // Stage 2: DOUBLE PASS noise reduction (proven stable, no overflow)
-            'afftdn=nf=-30:tn=1',          // First aggressive FFT denoiser (-30dB)
-            'afftdn=nf=-25:tn=1',          // Second pass to catch remaining noise
-            
-            // Stage 3: Voice frequency enhancement (critical for clarity)
-            'equalizer=f=300:t=q:w=2:g=1',  // Slight boost to low voice
-            'equalizer=f=1000:t=q:w=1:g=4', // Major boost to core voice (1kHz)
-            'equalizer=f=2000:t=q:w=1:g=3', // Boost presence/clarity (2kHz)
-            'equalizer=f=3000:t=q:w=1:g=2', // Boost high clarity
-            
-            // Stage 4: Volume normalization and compression
-            'loudnorm=I=-16:TP=-1.5:LRA=11', // Standard loudness
-            'compand=attacks=0.2:decays=0.6:points=-80/-80|-50/-50|-30/-27|-15/-12|-5/-5:soft-knee=6:gain=6', // Moderate compression
-            
-            // Stage 5: Final polish
-            'highpass=f=150',              // Final cleanup of low rumble
+            'highpass=f=200',              // Remove low-frequency rumble
+            'lowpass=f=3500',              // Remove high-frequency hiss
+            'afftdn=nf=-25:tn=1',          // Single pass noise reduction (proven stable)
+            'equalizer=f=1000:t=q:w=1:g=3', // Boost voice clarity
+            'equalizer=f=2000:t=q:w=1:g=2', // Boost presence
+            'loudnorm=I=-16:TP=-1.5:LRA=11', // Standard loudness normalization
+            'compand=attacks=0.3:decays=0.8:points=-80/-80|-45/-45|-27/-25|-5/-5:soft-knee=6:gain=5', // Light compression
           ])
-          // Audio codec settings - High quality
+          // Audio codec settings - Balanced quality
           .audioCodec('aac')
-          .audioBitrate('224k')            // Increased bitrate for better quality
+          .audioBitrate('192k')            // Balanced bitrate (good quality without overflow)
           .audioFrequency(48000)
           .audioChannels(1)                // Mono
           // Video codec (copy without re-encoding for speed)
