@@ -280,23 +280,32 @@ class RecordingService {
         await fs.writeFile(inputFile, inputBuffer);
 
         // Apply FFmpeg audio filters for MAXIMUM quality enhancement
+        // ULTRA AGGRESSIVE MODE - Remove ALL noise
         ffmpeg(inputFile)
-          // Audio filters for aggressive enhancement
+          // First normalize input audio
           .audioFilters([
-            'highpass=f=300',              // Remove low-frequency rumble (increase from 200 to 300Hz)
-            'lowpass=f=3400',              // Remove high-frequency hiss (voice range is 300-3400Hz)
-            'afftdn=nf=-25',               // More aggressive noise reduction (from -20 to -25dB)
-            'anlmdn=s=10:p=0.002:r=0.002', // Advanced noise reduction (temporal & spatial)
-            'loudnorm=I=-16:TP=-1.5:LRA=11', // Loudness normalization
-            'equalizer=f=1000:t=q:w=1:g=3', // Boost voice frequencies (1kHz)
-            'equalizer=f=2000:t=q:w=1:g=2', // Boost presence (2kHz)
-            'compand=attacks=0.3:decays=0.8:points=-80/-80|-45/-45|-27/-25|0/-15:soft-knee=6:gain=5', // Better compression
+            'volume=2.0',                  // Pre-boost volume
+            'highpass=f=200',              // First pass: Remove very low rumble
+            'lowpass=f=3500',              // Keep full voice range
+            'afftdn=nf=-30:tn=1',          // MAXIMUM noise reduction (-30dB) with tracking
+            'anlmdn=s=15:p=0.001:r=0.001:m=15', // EXTREME noise reduction (increased strength)
+            'highpass=f=300',              // Second pass: Remove remaining rumble
+            'lowpass=f=3400',              // Voice range only (telephone quality)
+            'afftdn=nf=-35:tn=1',          // THIRD noise reduction pass (even stronger)
+            'loudnorm=I=-14:TP=-1.0:LRA=7', // Aggressive normalization
+            'equalizer=f=500:t=q:w=1:g=2',  // Boost low voice
+            'equalizer=f=1000:t=q:w=1:g=4', // BOOST voice frequencies more
+            'equalizer=f=2000:t=q:w=1:g=3', // BOOST presence more
+            'equalizer=f=3000:t=q:w=1:g=2', // Boost clarity
+            'compand=attacks=0.1:decays=0.4:points=-80/-80|-50/-50|-30/-25|-10/-10|0/-5:soft-knee=6:gain=8', // MUCH stronger compression
             'deesser',                     // Remove harsh "s" sounds
-            'highpass=f=80',               // Second pass to remove very low frequencies
+            'afftdn=nf=-25',               // FOURTH pass for any remaining noise
+            'highpass=f=150',              // Final cleanup pass
+            'volume=1.5',                  // Post-boost for clarity
           ])
-          // Audio codec settings
+          // Audio codec settings - MAXIMUM quality
           .audioCodec('aac')
-          .audioBitrate('192k')            // Increase to 192kbps for better quality
+          .audioBitrate('256k')            // Increase to 256kbps for MAXIMUM quality
           .audioFrequency(48000)
           .audioChannels(1)                // Mono
           // Video codec (copy without re-encoding for speed)
