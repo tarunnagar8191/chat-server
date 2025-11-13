@@ -203,13 +203,22 @@ class RecordingService {
     try {
       console.log(`☁️  Uploading recording to S3 for call: ${callId}`);
       
+      // Optional: Apply audio enhancement using FFmpeg (if installed)
+      let processedBuffer = fileBuffer;
+      try {
+        processedBuffer = await this.enhanceAudioQuality(fileBuffer, callType);
+      } catch (enhanceError) {
+        console.log(`ℹ️  Audio enhancement skipped: ${enhanceError.message}`);
+        // Use original buffer if enhancement fails
+      }
+      
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const fileName = `recordings/${callType}/${callId}_${timestamp}.mp4`;
 
       const uploadParams = {
         Bucket: this.bucketName,
         Key: fileName,
-        Body: fileBuffer,
+        Body: processedBuffer,
         ContentType: "video/mp4",
         Metadata: {
           callId: callId,
@@ -230,13 +239,106 @@ class RecordingService {
       return {
         url: s3Url,
         key: fileName,
-        size: fileBuffer.length,
+        size: processedBuffer.length,
         bucket: this.bucketName,
       };
     } catch (error) {
       console.error(`❌ Error uploading to S3:`, error.message);
       throw error;
     }
+  }
+
+  /**
+   * Enhance audio quality using FFmpeg
+   * Applies noise reduction, normalization, and compression
+   * @param {Buffer} inputBuffer - Original MP4 buffer
+   * @param {string} callType - Call type
+   * @returns {Promise<Buffer>} Enhanced audio buffer
+   */
+  async enhanceAudioQuality(inputBuffer, callType) {
+    const ffmpeg = require('fluent-ffmpeg');
+    const fs = require('fs').promises;
+    const path = require('path');
+    const os = require('os');
+
+    return new Promise(async (resolve, reject) => {
+      // Skip enhancement if FFmpeg is not available
+      try {
+        require.resolve('fluent-ffmpeg');
+      } catch (e) {
+        return reject(new Error('FFmpeg not installed'));
+      }
+
+      const tempDir = os.tmpdir();
+      const inputFile = path.join(tempDir, `input_${Date.now()}.mp4`);
+      const outputFile = path.join(tempDir, `output_${Date.now()}.mp4`);
+
+      try {
+        console.log(`🎵 Enhancing audio quality with FFmpeg...`);
+
+        // Write input buffer to temp file
+        await fs.writeFile(inputFile, inputBuffer);
+
+        // Apply FFmpeg audio filters
+        ffmpeg(inputFile)
+          // Audio filters for enhancement
+          .audioFilters([
+            'highpass=f=200',              // Remove low-frequency rumble
+            'lowpass=f=3000',              // Remove high-frequency hiss
+            'afftdn=nf=-20',               // Noise reduction
+            'loudnorm=I=-16:TP=-1.5:LRA=11', // Loudness normalization
+            'compand',                     // Dynamic range compression
+          ])
+          // Audio codec settings
+          .audioCodec('aac')
+          .audioBitrate('128k')
+          .audioFrequency(48000)
+          .audioChannels(1)                // Mono
+          // Video codec (copy without re-encoding for speed)
+          .videoCodec('copy')
+          // Output
+          .output(outputFile)
+          .on('start', (commandLine) => {
+            console.log('🎬 FFmpeg command:', commandLine);
+          })
+          .on('progress', (progress) => {
+            if (progress.percent) {
+              console.log(`⏳ Processing: ${progress.percent.toFixed(1)}%`);
+            }
+          })
+          .on('end', async () => {
+            try {
+              console.log('✅ Audio enhancement completed');
+              
+              // Read enhanced file
+              const enhancedBuffer = await fs.readFile(outputFile);
+              
+              // Cleanup temp files
+              await fs.unlink(inputFile).catch(() => {});
+              await fs.unlink(outputFile).catch(() => {});
+              
+              resolve(enhancedBuffer);
+            } catch (readError) {
+              reject(readError);
+            }
+          })
+          .on('error', async (err) => {
+            console.error('❌ FFmpeg error:', err.message);
+            
+            // Cleanup temp files
+            await fs.unlink(inputFile).catch(() => {});
+            await fs.unlink(outputFile).catch(() => {});
+            
+            reject(err);
+          })
+          .run();
+      } catch (error) {
+        // Cleanup on error
+        await fs.unlink(inputFile).catch(() => {});
+        await fs.unlink(outputFile).catch(() => {});
+        reject(error);
+      }
+    });
   }
 
   /**

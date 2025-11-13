@@ -18,6 +18,9 @@
     "socket.io": "^4.7.2",
     "uuid": "^9.0.0"
   },
+  "optionalDependencies": {
+    "fluent-ffmpeg": "^2.1.2"
+  },
   "devDependencies": {
     "nodemon": "^3.0.1"
   }
