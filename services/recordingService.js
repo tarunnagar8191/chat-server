@@ -279,19 +279,24 @@ class RecordingService {
         // Write input buffer to temp file
         await fs.writeFile(inputFile, inputBuffer);
 
-        // Apply FFmpeg audio filters
+        // Apply FFmpeg audio filters for MAXIMUM quality enhancement
         ffmpeg(inputFile)
-          // Audio filters for enhancement
+          // Audio filters for aggressive enhancement
           .audioFilters([
-            'highpass=f=200',              // Remove low-frequency rumble
-            'lowpass=f=3000',              // Remove high-frequency hiss
-            'afftdn=nf=-20',               // Noise reduction
+            'highpass=f=300',              // Remove low-frequency rumble (increase from 200 to 300Hz)
+            'lowpass=f=3400',              // Remove high-frequency hiss (voice range is 300-3400Hz)
+            'afftdn=nf=-25',               // More aggressive noise reduction (from -20 to -25dB)
+            'anlmdn=s=10:p=0.002:r=0.002', // Advanced noise reduction (temporal & spatial)
             'loudnorm=I=-16:TP=-1.5:LRA=11', // Loudness normalization
-            'compand',                     // Dynamic range compression
+            'equalizer=f=1000:t=q:w=1:g=3', // Boost voice frequencies (1kHz)
+            'equalizer=f=2000:t=q:w=1:g=2', // Boost presence (2kHz)
+            'compand=attacks=0.3:decays=0.8:points=-80/-80|-45/-45|-27/-25|0/-15:soft-knee=6:gain=5', // Better compression
+            'deesser',                     // Remove harsh "s" sounds
+            'highpass=f=80',               // Second pass to remove very low frequencies
           ])
           // Audio codec settings
           .audioCodec('aac')
-          .audioBitrate('128k')
+          .audioBitrate('192k')            // Increase to 192kbps for better quality
           .audioFrequency(48000)
           .audioChannels(1)                // Mono
           // Video codec (copy without re-encoding for speed)

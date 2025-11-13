@@ -102,14 +102,6 @@ class AntMediaService {
         streamId: streamId,
         mp4Enabled: 1, // Enable MP4 recording
         webMEnabled: 0,
-        // Audio codec settings for better quality and less distortion
-        hlsListSize: 5,
-        hlsTime: 2,
-        // Optimize encoding settings for voice/video calls
-        videoCodec: "H264",
-        audioCodec: "AAC", // AAC provides better audio quality than default
-        audioBitrate: 128000, // 128kbps for high-quality audio
-        videoBitrate: 1000000, // 1Mbps for video
       };
 
       const response = await axios.post(
